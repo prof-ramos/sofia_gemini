@@ -20,20 +20,21 @@ export const ChatInterface: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const stopGenerationRef = useRef(false);
 
-  // Robust scrolling logic
+  // Scroll to bottom logic with dynamic behavior
   const scrollToBottom = (behavior: ScrollBehavior) => {
     messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
   };
 
   useLayoutEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    let behavior: ScrollBehavior = 'smooth';
-
-    if (isLoading && lastMessage?.role === Role.MODEL) {
-      behavior = 'auto';
-    }
-
     if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      
+      // Use 'auto' (instant) scrolling when AI is actively streaming to avoid 
+      // visual jitter and keeping the view locked to the newest text.
+      // Use 'smooth' for user messages or final AI response.
+      const isStreaming = isLoading && lastMessage.role === Role.MODEL;
+      const behavior = isStreaming ? 'auto' : 'smooth';
+      
       scrollToBottom(behavior);
     }
   }, [messages, isLoading]);
