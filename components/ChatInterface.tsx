@@ -5,13 +5,15 @@ import { MessageBubble } from './MessageBubble';
 import { sendMessageStream, resetChat } from '../services/geminiService';
 import { SUGGESTED_QUESTIONS, SOFIA_ERROR_MESSAGE } from '../constants';
 import { Button } from './ui/Button';
+import { useConfig } from '../contexts/ConfigContext';
 
 export const ChatInterface: React.FC = () => {
+  const { config } = useConfig();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: Role.MODEL,
-      text: "Olá! Como posso ajudar você hoje? Se tiver dúvidas sobre a carreira de Oficial de Chancelaria, remoções ou a ASOF, pode perguntar.",
+      text: `Olá! Eu sou a ${config.botName}. Como posso ajudar você hoje? Se tiver dúvidas sobre a carreira de Oficial de Chancelaria, remoções ou a ASOF, pode perguntar.`,
       timestamp: new Date()
     }
   ]);
@@ -58,7 +60,8 @@ export const ChatInterface: React.FC = () => {
     stopGenerationRef.current = false;
 
     try {
-      const stream = sendMessageStream(text);
+      // Passa a instrução de sistema configurada no Admin
+      const stream = sendMessageStream(text, config.systemInstruction);
       let accumulatedText = '';
       let responseId: string | null = null;
 
@@ -131,7 +134,7 @@ export const ChatInterface: React.FC = () => {
       setMessages([{
         id: Date.now().toString(),
         role: Role.MODEL,
-        text: "Conversa reiniciada. Em que mais posso ajudar?",
+        text: `Conversa reiniciada. Eu sou a ${config.botName}, em que mais posso ajudar?`,
         timestamp: new Date()
       }]);
     }
@@ -205,7 +208,7 @@ export const ChatInterface: React.FC = () => {
                      <div className="w-1 h-1 bg-accent rounded-full typing-dot"></div>
                    </div>
                  </div>
-                 <span className="text-[10px] md:text-xs text-slate-400 font-medium tracking-widest uppercase animate-pulse">Sofia digitando...</span>
+                 <span className="text-[10px] md:text-xs text-slate-400 font-medium tracking-widest uppercase animate-pulse">{config.botName} digitando...</span>
                </div>
             </div>
           )}
@@ -228,7 +231,7 @@ export const ChatInterface: React.FC = () => {
           </Button>
 
           <div className="flex-1 relative bg-neutral rounded-md border border-slate-200 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
-            <label htmlFor="chat-input" className="sr-only">Digite sua mensagem para a Sofia</label>
+            <label htmlFor="chat-input" className="sr-only">Digite sua mensagem para a {config.botName}</label>
             <textarea
               id="chat-input"
               ref={textareaRef}
@@ -237,6 +240,7 @@ export const ChatInterface: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Digite sua mensagem..."
+              aria-label={`Digite sua mensagem para a ${config.botName}`}
               className="w-full bg-transparent px-4 py-3 text-base md:text-sm text-slate-800 placeholder-slate-400 focus:outline-none resize-none max-h-32 scrollbar-thin rounded-md font-light"
               disabled={isLoading}
             />

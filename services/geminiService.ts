@@ -1,5 +1,4 @@
 import { GoogleGenAI, GenerateContentResponse, FunctionDeclaration, Type, Modality } from "@google/genai";
-import { SOFIA_SYSTEM_INSTRUCTION } from "../constants";
 import { Role, HistoryEntry, MessagePart } from "../types";
 
 // --- Tool Definitions (Function Declarations) ---
@@ -104,9 +103,9 @@ export const resetChat = () => {
 
 /**
  * Sends a message stream to Gemini using the recommended generateContentStream approach.
- * Handles automatic tool call resolution and thinking budget for better reasoning.
+ * Accepts a dynamic systemInstruction from the ConfigContext.
  */
-export async function* sendMessageStream(userInput: string) {
+export async function* sendMessageStream(userInput: string, systemInstruction: string) {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   // Add user message to history
@@ -117,7 +116,7 @@ export async function* sendMessageStream(userInput: string) {
 
   try {
     let currentIteration = 0;
-    const maxIterations = 5; // Safety cap for tool call loops
+    const maxIterations = 5;
 
     while (currentIteration < maxIterations) {
       currentIteration++;
@@ -129,9 +128,9 @@ export async function* sendMessageStream(userInput: string) {
           parts: h.parts
         })),
         config: {
-          systemInstruction: SOFIA_SYSTEM_INSTRUCTION,
+          systemInstruction: systemInstruction,
           temperature: 0.4,
-          thinkingConfig: { thinkingBudget: 8000 }, // Enable "deep thinking" for diplomatic accuracy
+          thinkingConfig: { thinkingBudget: 8000 },
           tools: [{
             functionDeclarations: [
               consultarStatusRemocaoDoc,
@@ -156,7 +155,6 @@ export async function* sendMessageStream(userInput: string) {
         }
       }
 
-      // If text was returned but no function calls, we are done
       if (functionCalls.length === 0) {
         if (accumulatedText) {
           conversationHistory.push({
@@ -167,8 +165,6 @@ export async function* sendMessageStream(userInput: string) {
         break;
       }
 
-      // If function calls were returned, we need to process them and continue the loop
-      // First, add the model's intent (the calls) to history
       conversationHistory.push({
         role: Role.MODEL,
         parts: functionCalls.map(call => ({
@@ -180,7 +176,6 @@ export async function* sendMessageStream(userInput: string) {
         }))
       });
 
-      // Execute functions
       const responses = await Promise.all(functionCalls.map(async (call) => {
         const fn = functionsMap[call.name];
         let result;
@@ -198,13 +193,10 @@ export async function* sendMessageStream(userInput: string) {
         };
       }));
 
-      // Add function responses to history and loop back to model
       conversationHistory.push({
-        role: Role.MODEL, // In many SDK versions, tool responses are considered parts of the model or user turn depending on context, but 'model' turn containing tool results is a common pattern for resubmission.
+        role: Role.MODEL,
         parts: responses as any
       });
-      
-      // The loop will now call Gemini again with the tool results in context.
     }
   } catch (error) {
     console.error("Gemini stream error:", error);

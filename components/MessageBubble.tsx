@@ -5,12 +5,14 @@ import {
   Share2, Copy, CheckCircle, X, Linkedin, Twitter, Link2 
 } from 'lucide-react';
 import { Button } from './ui/Button';
+import { useConfig } from '../contexts/ConfigContext';
 
 interface MessageBubbleProps {
   message: Message;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+  const { config } = useConfig();
   const isUser = message.role === Role.USER;
   const isError = message.isError;
   const [copied, setCopied] = useState(false);
@@ -243,7 +245,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             
             <div className="flex items-center gap-2 mt-2 px-1">
               <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase opacity-70">
-                {message.role === Role.MODEL ? 'Sofia • ASOF' : 'Oficial de Chancelaria'}
+                {message.role === Role.MODEL ? `${config.botName} • ASOF` : 'Oficial de Chancelaria'}
               </span>
               <span className="text-[10px] text-slate-300">•</span>
               <span className="text-[10px] text-slate-400 font-medium opacity-60">
