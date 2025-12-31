@@ -3,7 +3,7 @@ import { Send, RefreshCw, StopCircle, ArrowRight, Sparkles, Award, Plane, Briefc
 import { Message, Role } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { sendMessageStream, resetChat } from '../services/geminiService';
-import { SUGGESTED_QUESTIONS } from '../constants';
+import { SUGGESTED_QUESTIONS, SOFIA_ERROR_MESSAGE } from '../constants';
 
 export const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -103,7 +103,7 @@ export const ChatInterface: React.FC = () => {
         {
           id: Date.now().toString(),
           role: Role.MODEL,
-          text: "Desculpe, encontrei um erro ao processar sua solicitação. Por favor, tente novamente.",
+          text: SOFIA_ERROR_MESSAGE,
           timestamp: new Date(),
           isError: true
         }

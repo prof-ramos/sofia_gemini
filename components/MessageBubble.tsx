@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Message, Role } from '../types';
 import { 
   User, Sparkles, AlertCircle, ExternalLink, 
@@ -9,15 +9,22 @@ interface MessageBubbleProps {
   message: Message;
 }
 
+/**
+ * MessageBubble: Diplomatic-style message container for Sofia and the User.
+ * Features a custom lightweight Markdown parser for lists, tables, and bold text.
+ */
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === Role.USER;
   const isError = message.isError;
   const [copied, setCopied] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  
+  const messageContentRef = useRef<HTMLDivElement>(null);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.text);
+      const textToCopy = messageContentRef.current?.innerText || message.text;
+      await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -25,50 +32,70 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     }
   };
 
-  const shareOptions = [
-    {
-      name: 'LinkedIn',
-      icon: <Linkedin size={18} />,
-      color: 'bg-[#0077b5]',
-      action: () => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`, '_blank')
-    },
-    {
-      name: 'X (Twitter)',
-      icon: <Twitter size={18} />,
-      color: 'bg-black',
-      action: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(message.text.substring(0, 200) + '...')}&url=${encodeURIComponent(window.location.href)}`, '_blank')
-    },
-    {
-      name: 'Copiar Texto',
-      icon: <Copy size={18} />,
-      color: 'bg-primary',
-      action: handleCopy
-    },
-    {
-      name: 'Copiar Link',
-      icon: <Link2 size={18} />,
-      color: 'bg-accent',
-      action: () => {
-        navigator.clipboard.writeText(window.location.href);
-        alert('Link da página copiado!');
-      }
-    }
-  ];
+  /**
+   * Recursive parser for inline elements like **bold** and URLs.
+   */
+  const parseInline = (inlineText: string): React.ReactNode[] => {
+    // Detect bold marks (**text**) and URLs starting with http
+    const parts = inlineText.split(/(\*\*.*?\*\*|https?:\/\/\S+)/g);
+    
+    return parts.map((part, i) => {
+      if (!part) return null;
 
-  // Robust renderer for basic Markdown (Bold, Lists, and Tables) + URL Detection
-  const renderFormattedContent = (text: string) => {
-    const lines = text.split('\n');
+      // Handle Bold
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold text-inherit">{part.slice(2, -2)}</strong>;
+      }
+      
+      // Handle URLs
+      if (part.match(/^https?:\/\//)) {
+        let url = part;
+        let extra = '';
+        const punctuation = ['.', ',', '!', '?', ';', ':', ')', ']', '}'];
+        while (url.length > 0 && punctuation.includes(url[url.length - 1])) {
+          extra = url[url.length - 1] + extra;
+          url = url.slice(0, -1);
+        }
+
+        return (
+          <React.Fragment key={i}>
+            <a 
+              href={url} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className={`
+                inline-flex items-center gap-1 font-medium underline underline-offset-4 transition-all duration-200
+                ${isUser 
+                  ? 'text-accent-light hover:text-white decoration-accent-light/40 hover:decoration-white/60' 
+                  : 'text-accent hover:text-primary-light decoration-accent/40 hover:decoration-primary-light/60'}
+                break-all
+              `}
+            >
+              {url}
+              <ExternalLink size={12} className="shrink-0 opacity-70" />
+            </a>
+            {extra}
+          </React.Fragment>
+        );
+      }
+      
+      return part;
+    });
+  };
+
+  const formattedContent = useMemo(() => {
+    const lines = message.text.split('\n');
     const elements: React.ReactNode[] = [];
     let currentList: { type: 'ul' | 'ol'; items: React.ReactNode[] } | null = null;
     let currentTable: { headers: string[]; rows: string[][] } | null = null;
 
-    const flushList = (key: string) => {
+    const flushList = () => {
       if (currentList) {
         const ListTag = currentList.type;
         elements.push(
-          <ListTag key={key} className={`my-3 ml-6 space-y-1 ${currentList.type === 'ul' ? 'list-disc' : 'list-decimal'}`}>
+          <ListTag key={`list-${elements.length}`} className={`my-4 ml-6 space-y-2 ${currentList.type === 'ul' ? 'list-disc marker:text-accent' : 'list-decimal marker:text-accent font-medium'}`}>
             {currentList.items.map((item, idx) => (
-              <li key={idx} className="pl-1">{item}</li>
+              <li key={idx} className="pl-1 text-inherit leading-relaxed">{item}</li>
             ))}
           </ListTag>
         );
@@ -76,25 +103,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       }
     };
 
-    const flushTable = (key: string) => {
+    const flushTable = () => {
       if (currentTable) {
         elements.push(
-          <div key={key} className="my-4 overflow-x-auto rounded-md border border-slate-200 shadow-sm">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <div key={`table-${elements.length}`} className="my-5 overflow-x-auto rounded-sm border border-slate-200 shadow-sm bg-white">
+            <table className="min-w-full divide-y divide-slate-200 text-sm border-collapse">
               <thead className="bg-slate-50">
                 <tr>
                   {currentTable.headers.map((h, idx) => (
-                    <th key={idx} className="px-4 py-3 text-left font-bold text-primary uppercase tracking-wider">
+                    <th key={idx} className="px-4 py-3 text-left font-bold text-primary uppercase tracking-wider text-[11px] border-x border-slate-200 first:border-l-0 last:border-r-0">
                       {parseInline(h)}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100">
                 {currentTable.rows.map((row, rowIdx) => (
-                  <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                  <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
                     {row.map((cell, cellIdx) => (
-                      <td key={cellIdx} className="px-4 py-2.5 text-slate-600">
+                      <td key={cellIdx} className="px-4 py-2.5 text-slate-600 border-x border-slate-100 first:border-l-0 last:border-r-0">
                         {parseInline(cell)}
                       </td>
                     ))}
@@ -108,142 +135,93 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       }
     };
 
-    const parseInline = (inlineText: string) => {
-      const parts = inlineText.split(/(\*\*.*?\*\*|https?:\/\/[^\s\)]+)/g);
-      
-      return parts.map((part, i) => {
-        if (!part) return null;
+    lines.forEach((line) => {
+      const trimmed = line.trim();
 
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="font-bold text-inherit">{part.slice(2, -2)}</strong>;
-        }
-        
-        if (part.match(/^https?:\/\//)) {
-          let url = part;
-          let extra = '';
-          const punctuation = ['.', ',', '!', '?', ';', ':', ')', ']'];
-          while (url.length > 0 && punctuation.includes(url[url.length - 1])) {
-            extra = url[url.length - 1] + extra;
-            url = url.slice(0, -1);
-          }
-
-          return (
-            <React.Fragment key={i}>
-              <a 
-                href={url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className={`
-                  inline-flex items-center gap-1 font-medium underline underline-offset-4 transition-all
-                  ${isUser 
-                    ? 'text-white hover:text-accent-light decoration-white/40' 
-                    : 'text-accent hover:text-primary decoration-accent/40 hover:decoration-primary/60'}
-                  break-all
-                `}
-              >
-                {url}
-                <ExternalLink size={12} className="shrink-0 opacity-60" />
-              </a>
-              {extra}
-            </React.Fragment>
-          );
-        }
-        
-        return part;
-      });
-    };
-
-    lines.forEach((line, index) => {
-      const trimmedLine = line.trim();
-      const listKey = `list-${index}`;
-      const tableKey = `table-${index}`;
-
-      if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
-        const cells = trimmedLine.split('|').filter(c => c.trim().length > 0).map(c => c.trim());
-        if (trimmedLine.includes('---')) return;
+      // Table Detection
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        const cells = trimmed.split('|').filter(c => c.trim().length > 0 || trimmed.includes('---')).map(c => c.trim());
+        if (trimmed.includes('---')) return;
         if (!currentTable) {
+          flushList();
           currentTable = { headers: cells, rows: [] };
         } else {
           currentTable.rows.push(cells);
         }
-        flushList(listKey);
         return;
-      } else if (currentTable) {
-        flushTable(tableKey);
+      } else {
+        flushTable();
       }
 
-      if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
-        const content = parseInline(trimmedLine.substring(2));
+      // List Detection
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const content = parseInline(trimmed.substring(2));
         if (currentList && currentList.type === 'ul') {
           currentList.items.push(content);
         } else {
-          flushList(listKey);
+          flushList();
           currentList = { type: 'ul', items: [content] };
         }
         return;
       } 
       
-      const orderedMatch = trimmedLine.match(/^(\d+)\.\s+(.*)/);
+      const orderedMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
       if (orderedMatch) {
         const content = parseInline(orderedMatch[2]);
         if (currentList && currentList.type === 'ol') {
           currentList.items.push(content);
         } else {
-          flushList(listKey);
+          flushList();
           currentList = { type: 'ol', items: [content] };
         }
         return;
       }
 
-      flushList(listKey);
-      flushTable(tableKey);
+      flushList();
 
-      if (trimmedLine === '') {
-        elements.push(<div key={index} className="h-2" />);
+      if (trimmed === '') {
+        elements.push(<div key={`spacer-${elements.length}`} className="h-3" />);
       } else {
         elements.push(
-          <p key={index} className="mb-2 last:mb-0">
+          <p key={`p-${elements.length}`} className="mb-3 last:mb-0 leading-relaxed">
             {parseInline(line)}
           </p>
         );
       }
     });
 
-    flushList('final-list');
-    flushTable('final-table');
+    flushList();
+    flushTable();
     return elements;
-  };
+  }, [message.text, isUser]);
 
   return (
     <>
       <div className={`group flex w-full mb-6 md:mb-8 ${isUser ? 'justify-end' : 'justify-start'} fade-in`}>
         <div className={`flex max-w-[95%] sm:max-w-[90%] md:max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-3 md:gap-4 relative`}>
           
-          {/* Avatar Container */}
-          <div className={`flex-shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-sm flex items-center justify-center shadow-sm border transition-colors
+          <div className={`flex-shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-sm flex items-center justify-center shadow-sm border transition-colors duration-200
             ${isUser ? 'bg-neutral text-slate-600 border-slate-200' : 'bg-primary text-accent border-primary-light'}`}>
             {isUser ? <User size={18} /> : <Sparkles size={18} />}
           </div>
 
-          {/* Message Content Container */}
           <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} min-w-0 flex-1 relative`}>
             
-            {/* Action Buttons (Bot/Sofia only) */}
             {!isUser && !isError && (
-              <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <div className="absolute -top-3 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 ease-in-out z-10 translate-y-1 group-hover:translate-y-0">
                 <button 
                   onClick={() => setShowShareModal(true)}
-                  className="p-1.5 text-slate-400 hover:text-accent transition-colors duration-200"
+                  className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-accent hover:border-accent/40 rounded-sm shadow-sm transition-all duration-200"
                   title="Compartilhar"
                 >
-                  <Share2 size={18} />
+                  <Share2 size={16} />
                 </button>
                 <button 
                   onClick={handleCopy}
-                  className={`p-1.5 transition-colors duration-200 ${copied ? 'text-green-500' : 'text-slate-400 hover:text-accent'}`}
+                  className={`p-1.5 bg-white border shadow-sm rounded-sm transition-all duration-200 ${copied ? 'text-green-500 border-green-200 bg-green-50' : 'text-slate-400 border-slate-200 hover:text-accent hover:border-accent/40'}`}
                   title="Copiar texto"
                 >
-                  {copied ? <CheckCircle size={18} /> : <Copy size={18} />}
+                  {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
                 </button>
               </div>
             )}
@@ -251,7 +229,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             <div className={`
               px-5 py-3.5 md:px-6 md:py-4 rounded-sm shadow-sm text-base md:text-[15px] leading-relaxed relative border break-words w-full
               ${isUser 
-                ? 'bg-primary text-white border-primary-light' 
+                ? 'bg-primary text-white border-primary-light shadow-primary/10' 
                 : isError 
                   ? 'bg-red-50 border-red-200 text-red-800' 
                   : 'bg-white border-slate-200 text-slate-700'
@@ -260,12 +238,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               {isError && (
                 <div className="flex items-center gap-2 mb-2 text-red-600 font-bold text-[10px] uppercase tracking-widest border-b border-red-100 pb-1">
                   <AlertCircle size={14} />
-                  <span>Erro de Processamento</span>
+                  <span>Erro de Conexão</span>
                 </div>
               )}
               
-              <div className={`markdown-content ${isUser ? 'text-slate-50 font-light' : 'text-slate-700 font-normal'}`}>
-                {renderFormattedContent(message.text)}
+              <div ref={messageContentRef} className="markdown-content">
+                {formattedContent}
               </div>
             </div>
             
@@ -282,55 +260,40 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         </div>
       </div>
 
-      {/* Share Modal */}
       {showShareModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/40 backdrop-blur-sm fade-in">
-          <div className="bg-white w-full max-w-sm rounded-lg shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Header */}
+          <div className="bg-white w-full max-w-sm rounded-sm shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-primary text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Share2 size={18} className="text-accent" />
-                <h3 className="font-serif font-bold text-lg">Compartilhar Resposta</h3>
+                <h3 className="font-serif font-bold text-lg tracking-tight">Compartilhar</h3>
               </div>
-              <button 
-                onClick={() => setShowShareModal(false)}
-                className="p-1 hover:bg-white/10 rounded-full transition-colors"
-              >
+              <button onClick={() => setShowShareModal(false)} className="p-1 hover:bg-white/10 rounded-sm transition-colors">
                 <X size={20} />
               </button>
             </div>
-
-            {/* Content */}
             <div className="p-6">
-              <p className="text-sm text-slate-500 mb-6 font-light">
-                Selecione como deseja compartilhar esta informação oficial da ASOF.
-              </p>
-              
               <div className="grid grid-cols-2 gap-4">
-                {shareOptions.map((option) => (
-                  <button
-                    key={option.name}
-                    onClick={() => {
-                      option.action();
-                      if (option.name !== 'LinkedIn' && option.name !== 'X (Twitter)') setShowShareModal(false);
-                    }}
-                    className="flex flex-col items-center justify-center p-4 rounded-md border border-slate-100 hover:border-accent/30 hover:bg-neutral/30 transition-all group"
-                  >
-                    <div className={`w-10 h-10 ${option.color} text-white rounded-full flex items-center justify-center mb-3 shadow-md group-hover:scale-110 transition-transform`}>
-                      {option.icon}
-                    </div>
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">{option.name}</span>
-                  </button>
-                ))}
+                <button onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${window.location.href}`, '_blank')} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                   <Linkedin className="text-[#0077b5] mb-2 group-hover:scale-110 transition-transform" />
+                   <span className="text-[10px] font-bold uppercase tracking-widest">LinkedIn</span>
+                </button>
+                <button onClick={() => window.open(`https://twitter.com/intent/tweet?text=Sofia - ASOF&url=${window.location.href}`, '_blank')} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                   <Twitter className="text-black mb-2 group-hover:scale-110 transition-transform" />
+                   <span className="text-[10px] font-bold uppercase tracking-widest">Twitter</span>
+                </button>
+                <button onClick={handleCopy} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                   <Copy className="text-primary mb-2 group-hover:scale-110 transition-transform" />
+                   <span className="text-[10px] font-bold uppercase tracking-widest">Copiar</span>
+                </button>
+                <button onClick={() => {navigator.clipboard.writeText(window.location.href); setShowShareModal(false);}} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                   <Link2 className="text-accent mb-2 group-hover:scale-110 transition-transform" />
+                   <span className="text-[10px] font-bold uppercase tracking-widest">Link</span>
+                </button>
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
-              <button 
-                onClick={() => setShowShareModal(false)}
-                className="w-full py-2.5 text-xs font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-primary transition-colors"
-              >
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 text-center">
+              <button onClick={() => setShowShareModal(false)} className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400 hover:text-primary transition-colors">
                 Fechar
               </button>
             </div>

@@ -1,3 +1,4 @@
+
 export const SOFIA_SYSTEM_INSTRUCTION = `
 Você é a Sofia, a assistente virtual oficial da ASOF (Associação Nacional dos Oficiais de Chancelaria do Serviço Exterior Brasileiro).
 
@@ -26,3 +27,5 @@ export const SUGGESTED_QUESTIONS = [
   "O que faz um Oficial de Chancelaria?",
   "Quais são as últimas notícias da carreira?"
 ];
+
+export const SOFIA_ERROR_MESSAGE = "Sinto muito, colega. Tive uma breve instabilidade técnica e não consegui processar sua mensagem agora. Por favor, verifique sua conexão ou tente reformular a pergunta. Estou à disposição para ajudar assim que possível!";
