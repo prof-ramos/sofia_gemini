@@ -4,15 +4,12 @@ import {
   User, Sparkles, AlertCircle, ExternalLink, 
   Share2, Copy, CheckCircle, X, Linkedin, Twitter, Link2 
 } from 'lucide-react';
+import { Button } from './ui/Button';
 
 interface MessageBubbleProps {
   message: Message;
 }
 
-/**
- * MessageBubble: Diplomatic-style message container for Sofia and the User.
- * Features a custom lightweight Markdown parser for lists, tables, and bold text.
- */
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === Role.USER;
   const isError = message.isError;
@@ -32,22 +29,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     }
   };
 
-  /**
-   * Recursive parser for inline elements like **bold** and URLs.
-   */
   const parseInline = (inlineText: string): React.ReactNode[] => {
-    // Detect bold marks (**text**) and URLs starting with http
     const parts = inlineText.split(/(\*\*.*?\*\*|https?:\/\/\S+)/g);
     
     return parts.map((part, i) => {
       if (!part) return null;
 
-      // Handle Bold
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={i} className="font-bold text-inherit">{part.slice(2, -2)}</strong>;
       }
       
-      // Handle URLs
       if (part.match(/^https?:\/\//)) {
         let url = part;
         let extra = '';
@@ -73,6 +64,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             >
               {url}
               <ExternalLink size={12} className="shrink-0 opacity-70" />
+              <span className="sr-only">(abre em nova aba)</span>
             </a>
             {extra}
           </React.Fragment>
@@ -138,7 +130,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     lines.forEach((line) => {
       const trimmed = line.trim();
 
-      // Table Detection
       if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
         const cells = trimmed.split('|').filter(c => c.trim().length > 0 || trimmed.includes('---')).map(c => c.trim());
         if (trimmed.includes('---')) return;
@@ -153,7 +144,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         flushTable();
       }
 
-      // List Detection
       if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
         const content = parseInline(trimmed.substring(2));
         if (currentList && currentList.type === 'ul') {
@@ -209,20 +199,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             
             {!isUser && !isError && (
               <div className="absolute -top-3 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 ease-in-out z-10 translate-y-1 group-hover:translate-y-0">
-                <button 
+                <Button 
                   onClick={() => setShowShareModal(true)}
-                  className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-accent hover:border-accent/40 rounded-sm shadow-sm transition-all duration-200"
+                  variant="ghost"
+                  size="icon"
+                  className="bg-white/90 backdrop-blur-sm border-slate-200 p-2 min-h-[36px] min-w-[36px]"
                   title="Compartilhar"
                 >
                   <Share2 size={16} />
-                </button>
-                <button 
+                </Button>
+                <Button 
                   onClick={handleCopy}
-                  className={`p-1.5 bg-white border shadow-sm rounded-sm transition-all duration-200 ${copied ? 'text-green-500 border-green-200 bg-green-50' : 'text-slate-400 border-slate-200 hover:text-accent hover:border-accent/40'}`}
+                  variant="ghost"
+                  size="icon"
+                  className={`bg-white/90 backdrop-blur-sm border-slate-200 p-2 min-h-[36px] min-w-[36px] ${copied ? 'text-green-500 border-green-200 bg-green-50' : ''}`}
                   title="Copiar texto"
                 >
                   {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
-                </button>
+                </Button>
               </div>
             )}
 
@@ -266,36 +260,62 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             <div className="bg-primary text-white px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Share2 size={18} className="text-accent" />
-                <h3 className="font-serif font-bold text-lg tracking-tight">Compartilhar</h3>
+                <h2 className="font-serif font-bold text-lg tracking-tight">Compartilhar</h2>
               </div>
-              <button onClick={() => setShowShareModal(false)} className="p-1 hover:bg-white/10 rounded-sm transition-colors">
+              <Button 
+                onClick={() => setShowShareModal(false)} 
+                variant="ghost" 
+                size="icon" 
+                className="text-white hover:bg-white/10 border-none min-h-0 min-w-0 p-1"
+                aria-label="Fechar modal"
+              >
                 <X size={20} />
-              </button>
+              </Button>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${window.location.href}`, '_blank')} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                <Button 
+                  onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${window.location.href}`, '_blank')} 
+                  variant="outline"
+                  size="none"
+                  className="flex flex-col items-center p-4 hover:bg-neutral min-h-[80px]"
+                >
                    <Linkedin className="text-[#0077b5] mb-2 group-hover:scale-110 transition-transform" />
                    <span className="text-[10px] font-bold uppercase tracking-widest">LinkedIn</span>
-                </button>
-                <button onClick={() => window.open(`https://twitter.com/intent/tweet?text=Sofia - ASOF&url=${window.location.href}`, '_blank')} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                </Button>
+                <Button 
+                  onClick={() => window.open(`https://twitter.com/intent/tweet?text=Sofia - ASOF&url=${window.location.href}`, '_blank')} 
+                  variant="outline"
+                  size="none"
+                  className="flex flex-col items-center p-4 hover:bg-neutral min-h-[80px]"
+                >
                    <Twitter className="text-black mb-2 group-hover:scale-110 transition-transform" />
                    <span className="text-[10px] font-bold uppercase tracking-widest">Twitter</span>
-                </button>
-                <button onClick={handleCopy} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                </Button>
+                <Button 
+                  onClick={handleCopy} 
+                  variant="outline"
+                  size="none"
+                  className="flex flex-col items-center p-4 hover:bg-neutral min-h-[80px]"
+                >
                    <Copy className="text-primary mb-2 group-hover:scale-110 transition-transform" />
                    <span className="text-[10px] font-bold uppercase tracking-widest">Copiar</span>
-                </button>
-                <button onClick={() => {navigator.clipboard.writeText(window.location.href); setShowShareModal(false);}} className="flex flex-col items-center p-4 border border-slate-100 hover:bg-neutral rounded-sm transition-all group">
+                </Button>
+                <Button 
+                  onClick={() => {navigator.clipboard.writeText(window.location.href); setShowShareModal(false);}} 
+                  variant="outline"
+                  size="none"
+                  className="flex flex-col items-center p-4 hover:bg-neutral min-h-[80px]"
+                >
                    <Link2 className="text-accent mb-2 group-hover:scale-110 transition-transform" />
                    <span className="text-[10px] font-bold uppercase tracking-widest">Link</span>
-                </button>
+                </Button>
               </div>
             </div>
             <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 text-center">
-              <button onClick={() => setShowShareModal(false)} className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400 hover:text-primary transition-colors">
+              <Button onClick={() => setShowShareModal(false)} variant="ghost" className="text-[10px] tracking-[0.3em] font-bold">
                 Fechar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
