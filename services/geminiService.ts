@@ -103,12 +103,10 @@ export const resetChat = () => {
 
 /**
  * Sends a message stream to Gemini using the recommended generateContentStream approach.
- * Accepts a dynamic systemInstruction from the ConfigContext.
  */
-export async function* sendMessageStream(userInput: string, systemInstruction: string) {
+export async function* sendMessageStream(userInput: string, systemInstruction: string, modelName: string) {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Add user message to history
   conversationHistory.push({
     role: Role.USER,
     parts: [{ text: userInput }]
@@ -122,15 +120,16 @@ export async function* sendMessageStream(userInput: string, systemInstruction: s
       currentIteration++;
 
       const stream = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview',
+        model: modelName,
         contents: conversationHistory.map(h => ({
           role: h.role,
           parts: h.parts
         })),
         config: {
           systemInstruction: systemInstruction,
-          temperature: 0.4,
-          thinkingConfig: { thinkingBudget: 8000 },
+          temperature: 0.35,
+          // O thinkingBudget é removido quando se usa tools para evitar o erro de 'thought signature'
+          // O modelo decidirá o raciocínio automaticamente.
           tools: [{
             functionDeclarations: [
               consultarStatusRemocaoDoc,

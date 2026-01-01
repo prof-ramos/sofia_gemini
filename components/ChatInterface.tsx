@@ -60,8 +60,8 @@ export const ChatInterface: React.FC = () => {
     stopGenerationRef.current = false;
 
     try {
-      // Passa a instrução de sistema configurada no Admin
-      const stream = sendMessageStream(text, config.systemInstruction);
+      // Passa a instrução de sistema e o nome do modelo configurado no Admin
+      const stream = sendMessageStream(text, config.systemInstruction, config.modelName);
       let accumulatedText = '';
       let responseId: string | null = null;
 

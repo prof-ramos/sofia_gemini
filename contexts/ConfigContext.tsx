@@ -5,6 +5,7 @@ interface AppConfig {
   systemInstruction: string;
   botName: string;
   avatarUrl: string;
+  modelName: string;
   knowledgeBaseFiles: File[];
 }
 
@@ -19,6 +20,7 @@ const defaultState: AppConfig = {
   systemInstruction: SOFIA_SYSTEM_INSTRUCTION,
   botName: 'Sofia',
   avatarUrl: 'sparkles',
+  modelName: 'gemini-3-pro-preview', // Corrigido de gemma-3-12b-it
   knowledgeBaseFiles: []
 };
 
