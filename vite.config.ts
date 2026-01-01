@@ -8,6 +8,33 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        headers: {
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'X-XSS-Protection': '1; mode=block',
+        }
+      },
+      preview: {
+        port: 4173,
+        host: '0.0.0.0',
+        headers: {
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'X-XSS-Protection': '1; mode=block',
+        }
+      },
+      build: {
+        outDir: 'dist',
+        sourcemap: 'hidden',
+        minify: 'esbuild',
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+              icons: ['lucide-react'],
+            }
+          }
+        }
       },
       plugins: [react()],
       define: {
