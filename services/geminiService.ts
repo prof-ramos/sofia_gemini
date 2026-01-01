@@ -1,4 +1,3 @@
-import { GoogleGenAI, ApiError } from "@google/genai";
 import { Role, HistoryEntry } from "../types";
 import {
   PRIMARY_MODEL,
@@ -138,18 +137,15 @@ export const resetChat = () => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Sends a message stream to Gemini with fallback mechanisms.
- */
 export async function* sendMessageStream(
   userInput: string,
   systemInstruction: string,
   modelName: string,
 ) {
-  const apiKey = process.env.API_KEY || "";
-  const ai = new GoogleGenAI({ apiKey });
+  // We keep history management here in the client for simplicity,
+  // but we send the whole state to the serverless function.
 
-  // Deep clone history before user message to allow perfect rollback
+  // Backup for rollback
   const historySnapshot = JSON.parse(JSON.stringify(conversationHistory));
 
   conversationHistory.push({
@@ -157,165 +153,176 @@ export async function* sendMessageStream(
     parts: [{ text: userInput }],
   });
 
-  async function* executeGeneration(
+  async function* fetchStream(
     currentModel: string,
-    currentSystemInstruction: string,
+    currentInstruction: string,
   ) {
-    let currentIteration = 0;
-    const maxIterations = 5;
+    // The proxy expects tools definition in the body to configure the model instance
+    // We pass the tools defined in this file.
+    const tools = [
+      {
+        functionDeclarations: [
+          consultarStatusRemocaoDoc,
+          calcularAuxilioDeslocamentoDoc,
+          consultarLegislacaoDoc,
+          obterNoticiasDoc,
+        ],
+      },
+    ];
 
-    // Local history snapshot for function call rollbacks
-    const internalSnapshot = JSON.parse(JSON.stringify(conversationHistory));
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        history: conversationHistory.map((h) => ({
+          role: h.role,
+          parts: h.parts,
+        })),
+        modelName: currentModel,
+        systemInstruction: currentInstruction,
+        tools: tools,
+      }),
+    });
 
-    try {
-      while (currentIteration < maxIterations) {
-        currentIteration++;
+    if (!response.ok) {
+      let errorBody;
+      try {
+        errorBody = await response.json();
+      } catch (e) {
+        errorBody = { message: response.statusText };
+      }
+      throw new Error(
+        errorBody.error || errorBody.message || `HTTP Error ${response.status}`,
+      );
+    }
 
-        const response = await ai.models.generateContentStream({
-          model: currentModel,
-          contents: conversationHistory.map((h) => ({
-            role: h.role,
-            parts: h.parts,
-          })),
-          config: {
-            systemInstruction: currentSystemInstruction,
-            temperature: 0.35,
-            tools: [
-              {
-                functionDeclarations: [
-                  consultarStatusRemocaoDoc,
-                  calcularAuxilioDeslocamentoDoc,
-                  consultarLegislacaoDoc,
-                  obterNoticiasDoc,
-                ],
-              } as any,
-            ],
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    let accumulatedText = "";
+    const functionCalls: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.type === "text") {
+            accumulatedText += chunk.content;
+            yield chunk.content;
+          } else if (chunk.type === "functionCalls") {
+            if (Array.isArray(chunk.content)) {
+              functionCalls.push(...chunk.content);
+            } else if (chunk.content) {
+              functionCalls.push(chunk.content);
+            }
+          }
+        } catch (e) {
+          console.warn("Error parsing chunk:", e);
+        }
+      }
+    }
+
+    // Handle function calls logic (mirroring previous implementation)
+    if (functionCalls.length > 0) {
+      conversationHistory.push({
+        role: Role.MODEL,
+        parts: functionCalls.map((call, idx) => ({
+          functionCall: {
+            name: call.name,
+            args: call.args,
+            id: call.id || `call_${Date.now()}_${idx}`,
           },
-        });
+        })),
+      });
 
-        let accumulatedText = "";
-        const functionCalls: any[] = [];
-
-        for await (const chunk of response) {
-          if (chunk.text) {
-            accumulatedText += chunk.text;
-            yield chunk.text;
+      // Execute functions locally
+      const responses = await Promise.all(
+        functionCalls.map(async (call) => {
+          const fn = functionsMap[call.name];
+          let result;
+          try {
+            result = fn
+              ? fn(call.args)
+              : { error: "Ferramenta não encontrada" };
+          } catch (e: any) {
+            result = { error: e.message };
           }
-          if (chunk.functionCalls) {
-            functionCalls.push(...chunk.functionCalls);
-          }
-        }
-
-        if (functionCalls.length === 0) {
-          if (accumulatedText) {
-            conversationHistory.push({
-              role: Role.MODEL,
-              parts: [{ text: accumulatedText }],
-            });
-          }
-          break;
-        }
-
-        conversationHistory.push({
-          role: Role.MODEL,
-          parts: functionCalls.map((call) => ({
-            functionCall: {
+          return {
+            functionResponse: {
               name: call.name,
-              args: call.args,
+              response: { result },
               id: call.id,
             },
-          })),
-        });
+          };
+        }),
+      );
 
-        const responses = await Promise.all(
-          functionCalls.map(async (call) => {
-            const fn = functionsMap[call.name];
-            let result;
-            try {
-              result = fn
-                ? fn(call.args)
-                : { error: "Ferramenta não encontrada" };
-            } catch (e: any) {
-              result = { error: e.message };
-            }
-            return {
-              functionResponse: {
-                name: call.name,
-                response: { result },
-                id: call.id,
-              },
-            };
-          }),
-        );
+      conversationHistory.push({
+        role: Role.MODEL, // Keeping Role.MODEL for consistency
+        parts: responses as any,
+      });
 
-        conversationHistory.push({
-          role: Role.MODEL,
-          parts: responses as any,
-        });
-      }
-    } catch (e) {
-      conversationHistory = JSON.parse(JSON.stringify(internalSnapshot));
-      throw e;
+      // Recursive call for follow-up
+      yield* fetchStream(currentModel, currentInstruction);
+    } else if (accumulatedText) {
+      conversationHistory.push({
+        role: Role.MODEL,
+        parts: [{ text: accumulatedText }],
+      });
     }
-  }
-
-  async function* attemptModel(
-    model: string,
-    instruction: string,
-    retries = 2,
-  ): AsyncGenerator<string, boolean, unknown> {
-    for (let i = 0; i <= retries; i++) {
-      try {
-        for await (const chunk of executeGeneration(model, instruction)) {
-          yield chunk;
-        }
-        return true;
-      } catch (error: any) {
-        console.error(
-          `Error with model ${model} (attempt ${i + 1}/${retries + 1}):`,
-          error,
-        );
-
-        const status =
-          error.status ||
-          (error instanceof ApiError
-            ? error.status
-            : (error as any).response?.status);
-        const isRetriable = status === 429 || (status >= 500 && status < 600);
-
-        if (isRetriable && i < retries) {
-          const waitTime = Math.pow(2, i) * 1000 + Math.random() * 500;
-          console.warn(`Retrying after ${waitTime}ms...`);
-          await delay(waitTime);
-          continue;
-        }
-        return false;
-      }
-    }
-    return false;
   }
 
   try {
     const chosenPrimary = modelName || PRIMARY_MODEL;
-    const success = yield* attemptModel(chosenPrimary, systemInstruction);
+    // simple retry logic for the fetch wrapper
+    const retries = 2;
+    for (let i = 0; i <= retries; i++) {
+      try {
+        yield* fetchStream(chosenPrimary, systemInstruction);
+        break;
+      } catch (e: any) {
+        console.warn(`Attempt ${i + 1} failed:`, e);
 
-    if (!success) {
-      conversationHistory = JSON.parse(JSON.stringify(historySnapshot));
-      conversationHistory.push({
-        role: Role.USER,
-        parts: [{ text: userInput }],
-      });
+        // Check for retriable errors from the proxy (which might wrap upstream errors)
+        // Simple heuristic: if it mentions 429 or 5xx
+        const errMsg = (e.message || "").toLowerCase();
+        const isRetriable =
+          errMsg.includes("429") ||
+          errMsg.includes("503") ||
+          errMsg.includes("500") ||
+          errMsg.includes("fetch failed");
 
-      console.warn("Primary model failed, switching to fallback...");
-      const fallbackSuccess = yield* attemptModel(
-        FALLBACK_MODEL,
-        GEMMA_SYSTEM_INSTRUCTION,
-        1,
-      );
-      if (!fallbackSuccess) throw new Error("Fallback model also failed");
+        if (i === retries || !isRetriable) throw e;
+        await delay(1000 * Math.pow(2, i));
+      }
     }
   } catch (error) {
-    console.error("Critical error in sendMessageStream:", error);
-    throw error;
+    console.warn("Primary model failed, switching to fallback...", error);
+    // Rollback
+    conversationHistory = JSON.parse(JSON.stringify(historySnapshot));
+    conversationHistory.push({
+      role: Role.USER,
+      parts: [{ text: userInput }],
+    });
+
+    try {
+      yield* fetchStream(FALLBACK_MODEL, GEMMA_SYSTEM_INSTRUCTION);
+    } catch (fallbackError) {
+      console.error("All models failed:", fallbackError);
+      throw fallbackError;
+    }
   }
 }
