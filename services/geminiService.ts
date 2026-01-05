@@ -146,11 +146,11 @@ export async function* sendMessageStream(
   systemInstruction: string,
   modelName: string,
 ) {
-  const apiKey = process.env.API_KEY || "";
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
   const ai = new GoogleGenAI({ apiKey });
 
   // Deep clone history before user message to allow perfect rollback
-  const historySnapshot = JSON.parse(JSON.stringify(conversationHistory));
+  const historySnapshot = structuredClone(conversationHistory);
 
   conversationHistory.push({
     role: Role.USER,
@@ -165,15 +165,18 @@ export async function* sendMessageStream(
     const maxIterations = 5;
 
     // Local history snapshot for function call rollbacks
-    const internalSnapshot = JSON.parse(JSON.stringify(conversationHistory));
+    const internalSnapshot = structuredClone(conversationHistory);
 
     try {
       while (currentIteration < maxIterations) {
         currentIteration++;
 
+        // Sliding window: send only the last 40 messages to the API to save tokens/memory
+        const contextWindow = conversationHistory.slice(-40);
+
         const response = await ai.models.generateContentStream({
           model: currentModel,
-          contents: conversationHistory.map((h) => ({
+          contents: contextWindow.map((h) => ({
             role: h.role,
             parts: h.parts,
           })),
@@ -254,7 +257,7 @@ export async function* sendMessageStream(
         });
       }
     } catch (e) {
-      conversationHistory = JSON.parse(JSON.stringify(internalSnapshot));
+      conversationHistory = structuredClone(internalSnapshot);
       throw e;
     }
   }
@@ -300,7 +303,7 @@ export async function* sendMessageStream(
     const success = yield* attemptModel(chosenPrimary, systemInstruction);
 
     if (!success) {
-      conversationHistory = JSON.parse(JSON.stringify(historySnapshot));
+      conversationHistory = structuredClone(historySnapshot);
       conversationHistory.push({
         role: Role.USER,
         parts: [{ text: userInput }],

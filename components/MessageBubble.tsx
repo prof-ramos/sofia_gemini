@@ -11,7 +11,7 @@ interface MessageBubbleProps {
   message: Message;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message }) => {
   const { config } = useConfig();
   const isUser = message.role === Role.USER;
   const isError = message.isError;
@@ -65,7 +65,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               `}
             >
               {url}
-              <ExternalLink size={12} className="shrink-0 opacity-70" />
+              <ExternalLink size={12} className="shrink-0 opacity-70" aria-hidden="true" />
               <span className="sr-only">(abre em nova aba)</span>
             </a>
             {extra}
@@ -105,7 +105,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               <thead className="bg-slate-50">
                 <tr>
                   {currentTable.headers.map((h, idx) => (
-                    <th key={idx} className="px-4 py-3 text-left font-bold text-primary uppercase tracking-wider text-[11px] border-x border-slate-200 first:border-l-0 last:border-r-0">
+                    <th key={idx} scope="col" className="px-4 py-3 text-left font-bold text-primary uppercase tracking-wider text-[11px] border-x border-slate-200 first:border-l-0 last:border-r-0">
                       {parseInline(h)}
                     </th>
                   ))}
@@ -325,3 +325,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     </>
   );
 };
+
+export const MessageBubble = React.memo(MessageBubbleComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.message.text === nextProps.message.text &&
+    prevProps.message.isError === nextProps.message.isError &&
+    prevProps.message.role === nextProps.message.role &&
+    prevProps.message.timestamp.getTime() === nextProps.message.timestamp.getTime()
+  );
+});

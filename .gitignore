@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+*_debug.md
 
 # Generated files
 repomix-output.xml

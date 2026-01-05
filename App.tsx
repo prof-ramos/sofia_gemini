@@ -18,10 +18,10 @@ const AppContent: React.FC = () => {
           variant="ghost" 
           size="icon" 
           onClick={() => setView(view === 'chat' ? 'admin' : 'chat')}
-          className="bg-primary/10 hover:bg-primary/20 text-primary border-none rounded-full min-h-0 min-w-0 p-2 h-8 w-8"
+          className="bg-primary/10 hover:bg-primary/20 text-primary border-none rounded-full h-11 w-11"
           title={view === 'chat' ? "Administração" : "Sair do Admin"}
         >
-          <Settings size={16} />
+          <Settings size={20} />
         </Button>
       </div>
 
