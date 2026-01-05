@@ -27,7 +27,7 @@ export const ChatInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
   };
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       const isStreaming = isLoading && lastMessage.role === Role.MODEL;
@@ -230,7 +230,7 @@ export const ChatInterface: React.FC = () => {
             <RefreshCw size={20} />
           </Button>
 
-          <div className="flex-1 relative bg-neutral rounded-md border border-slate-200 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+          <div className="flex-1 relative bg-neutral rounded-md border border-slate-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
             <label htmlFor="chat-input" className="sr-only">Digite sua mensagem para a {config.botName}</label>
             <textarea
               id="chat-input"

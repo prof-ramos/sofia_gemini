@@ -6,7 +6,7 @@ export const Header: React.FC = () => {
   return (
     <header className="bg-primary text-white shadow-md z-20 border-b border-primary-light shrink-0">
       <div className="max-w-5xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
-        <div className="flex items-center space-x-3 md:space-x-4 group cursor-pointer" aria-label="Home ASOF">
+        <a href="/" className="flex items-center space-x-3 md:space-x-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm" aria-label="Ir para página inicial ASOF">
           <div className="w-8 h-8 md:w-11 md:h-11 bg-primary-light rounded-sm flex items-center justify-center border border-white/10 shadow-lg shrink-0 transition-transform group-hover:scale-105">
              <Shield className="w-4 h-4 md:w-6 md:h-6 text-accent" />
           </div>
@@ -14,7 +14,7 @@ export const Header: React.FC = () => {
             <span className="font-serif font-bold text-lg md:text-2xl leading-none tracking-tight text-white">ASOF</span>
             <span className="text-[9px] md:text-[10px] text-accent/80 uppercase tracking-[0.25em] font-semibold mt-1">Oficiais de Chancelaria</span>
           </div>
-        </div>
+        </a>
         
         <div className="flex items-center space-x-4 md:space-x-8 text-sm">
           <nav className="hidden lg:flex items-center space-x-6" aria-label="Navegação principal">
